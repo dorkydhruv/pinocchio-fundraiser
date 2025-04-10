@@ -42,12 +42,7 @@ fn process_instruction(
         }
         ProgramInstruction::Refund => {
             log!("Refund instruction");
-            todo!()
-            // instruction::contribute::process_refund(accounts, instruction_data)
-        }
-        _ => {
-            log!("Invalid instruction");
-            return Err(ProgramError::InvalidInstructionData);
+            instruction::refund::process_refund(accounts, instruction_data)
         }
     }
 }

@@ -3,9 +3,11 @@ use pinocchio::program_error::ProgramError;
 pub mod initialize;
 pub mod contribute;
 pub mod checker;
+pub mod refund;
 pub use initialize::*;
 pub use contribute::*;
 pub use checker::*;
+pub use refund::*;
 
 #[repr(u8)]
 pub enum ProgramInstruction {

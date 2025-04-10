@@ -1,5 +1,6 @@
 use pinocchio::{
     account_info::AccountInfo,
+    instruction::{ Seed, Signer },
     program_error::ProgramError,
     sysvars::{ clock::Clock, rent::Rent, Sysvar },
     ProgramResult,
@@ -58,27 +59,32 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     // Create contributor account if it doesn't exist
     if contributor_acc.data_is_empty() {
         let rent = Rent::from_account_info(sysvar_rent_acc)?;
-        let contributer_signer = Contributor::get_signer_seeds(
-            fundraiser.key(),
-            contributor.key(),
-            ix_data.contributor_bump
-        );
+        let pda_bump_bytes = [ix_data.contributor_bump];
+        let signer_seeds = [
+            Seed::from(Contributor::SEED.as_bytes()),
+            Seed::from(fundraiser.key().as_ref()),
+            Seed::from(contributor.key().as_ref()),
+            Seed::from(&pda_bump_bytes[..]),
+        ];
+        let contributor_signer = Signer::from(&signer_seeds[..]);
         (CreateAccount {
             from: contributor,
             to: contributor_acc,
             lamports: rent.minimum_balance(Contributor::LEN),
             space: Contributor::LEN as u64,
             owner: &crate::ID,
-        }).invoke_signed(&[contributer_signer[..]])?;
-        let mut contributor_state = (unsafe {
+        }).invoke_signed(&[contributor_signer])?;
+        let contributor_state = (unsafe {
             load_acc_mut_unchecked::<Contributor>(contributor_acc.borrow_mut_data_unchecked())
         })?;
         contributor_state.initialize(ix_data.amount);
     }
 
-    let fundraiser_state = unsafe { load_acc_mut_unchecked::<Fundraiser>(fundraiser)? };
-    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise)? };
-    let mut contributor_state = (unsafe {
+    let fundraiser_state = unsafe {
+        load_acc_mut_unchecked::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
+    };
+    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise.borrow_data_unchecked())? };
+    let contributor_state = (unsafe {
         load_acc_mut_unchecked::<Contributor>(contributor_acc.borrow_mut_data_unchecked())
     })?;
     // Check if the amount to contribute meets the minimum amount required
@@ -98,7 +104,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     let current_time = Clock::get()?.unix_timestamp;
     if
         fundraiser_state.duration >
-        (((current_time - fundraiser_state.start_time) / SECONDS_TO_DAYS) as u8)
+        (((current_time - fundraiser_state.time_started) / SECONDS_TO_DAYS) as u8)
     {
         return Err(FundraiserError::FundraiserEnded.into());
     }
@@ -113,12 +119,14 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         return Err(FundraiserError::MaximumContributionsReached.into());
     }
 
-    // Now we can transfer the tokens
-    let contributor_signer = Contributor::get_signer_seeds(
-        fundraiser.key(),
-        contributor.key(),
-        ix_data.contributor_bump
-    );
+    let pda_bump_bytes = [ix_data.contributor_bump];
+    let signer_seeds = [
+        Seed::from(Contributor::SEED.as_bytes()),
+        Seed::from(fundraiser.key().as_ref()),
+        Seed::from(contributor.key().as_ref()),
+        Seed::from(&pda_bump_bytes[..]),
+    ];
+    let contributor_signer = Signer::from(&signer_seeds[..]);
     (TransferChecked {
         from: contributor_ata,
         to: vault,
@@ -126,7 +134,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         mint: mint_to_raise,
         amount: ix_data.amount,
         decimals: mint_state.decimals(),
-    }).invoke_signed(&[contributor_signer[..]])?;
+    }).invoke_signed(&[contributor_signer])?;
 
     // Update the states
     contributor_state.amount += ix_data.amount;

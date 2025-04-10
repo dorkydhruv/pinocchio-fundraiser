@@ -1,4 +1,4 @@
-use pinocchio::{ instruction::{ Seed, Signer }, pubkey::Pubkey };
+use pinocchio::pubkey::Pubkey;
 
 use crate::utils::{ DataLen, Initialized };
 
@@ -27,16 +27,6 @@ impl Initialized for Fundraiser {
 
 impl Fundraiser {
     pub const SEED: &'static str = "fundraiser";
-
-    pub fn get_signer_seeds(maker: &Pubkey, bump: u8) -> Signer<'_, '_> {
-        let pda_bump_bytes = [bump];
-        let signer_seeds = [
-            Seed::from(Self::SEED),
-            Seed::from(maker.as_ref()),
-            Seed::from(&bump[..]),
-        ];
-        Signer::from(&signer_seeds[..])
-    }
 
     pub fn initialize(
         &mut self,

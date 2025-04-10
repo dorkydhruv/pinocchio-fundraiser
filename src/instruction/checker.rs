@@ -1,4 +1,9 @@
-use pinocchio::{ account_info::AccountInfo, program_error::ProgramError, ProgramResult };
+use pinocchio::{
+    account_info::AccountInfo,
+    instruction::{ Seed, Signer },
+    program_error::ProgramError,
+    ProgramResult,
+};
 use pinocchio_token::{
     instructions::{ CloseAccount, TransferChecked },
     state::Mint,
@@ -7,8 +12,16 @@ use pinocchio_token::{
 use crate::{
     error::FundraiserError,
     state::Fundraiser,
-    utils::{ load_acc_unchecked, Initialized },
+    utils::{ load_acc_unchecked, DataLen, Initialized },
 };
+
+impl DataLen for Mint {
+    const LEN: usize = core::mem::size_of::<Mint>();
+}
+
+impl DataLen for TokenAccount {
+    const LEN: usize = core::mem::size_of::<TokenAccount>();
+}
 
 pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     let [maker, mint_to_raise, fundraiser, vault, maker_ata, _token_program, _system_program] =
@@ -20,7 +33,9 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let fundraiser_state = unsafe { load_acc_unchecked::<Fundraiser>(fundraiser)? };
+    let fundraiser_state = unsafe {
+        load_acc_unchecked::<Fundraiser>(fundraiser.borrow_data_unchecked())?
+    };
 
     if !fundraiser_state.is_initialized() {
         return Err(ProgramError::UninitializedAccount);
@@ -31,10 +46,19 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
     }
 
     // Transfer the funds to the maker
-    let maker_ata_state = unsafe { load_acc_unchecked::<TokenAccount>(maker_ata)? };
-    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise)? };
+    let _maker_ata_state = unsafe {
+        load_acc_unchecked::<TokenAccount>(maker_ata.borrow_data_unchecked())?
+    };
+    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise.borrow_data_unchecked())? };
 
-    let fundraiser_signer = Fundraiser::get_signer_seeds(maker.key(), fundraiser_state.bump);
+    let bump_seed = [fundraiser_state.bump];
+    let fundraiser_seeds = [
+        Seed::from(Fundraiser::SEED.as_bytes()),
+        Seed::from(maker.key().as_ref()),
+        Seed::from(&bump_seed[..]),
+    ];
+
+    let fundraiser_signer = Signer::from(&fundraiser_seeds[..]);
     (TransferChecked {
         amount: fundraiser_state.current_amount,
         from: vault,
@@ -53,8 +77,8 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
 
     // Close the fundraiser account
     unsafe {
-        maker.borrow_mut_lamports_unchecked() += fundraiser.borrow_mut_lamports_unchecked();
-        fundraiser.close();
+        *maker.borrow_mut_lamports_unchecked() += *fundraiser.borrow_lamports_unchecked();
+        fundraiser.close()?;
     }
 
     Ok(())

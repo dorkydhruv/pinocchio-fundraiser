@@ -38,8 +38,7 @@ fn process_instruction(
         }
         ProgramInstruction::CheckContribution => {
             log!("CheckContribution instruction");
-            todo!()
-            // instruction::contribute::process_check_contribution(accounts, instruction_data)
+            instruction::checker::process_check_contribution(accounts, instruction_data)
         }
         ProgramInstruction::Refund => {
             log!("Refund instruction");

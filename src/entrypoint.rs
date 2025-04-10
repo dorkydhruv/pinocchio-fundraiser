@@ -1,4 +1,4 @@
-use crate::instruction::ProgramInstruction;
+use crate::instruction::{ self, ProgramInstruction };
 use pinocchio::{
     account_info::AccountInfo,
     no_allocator,
@@ -28,6 +28,24 @@ fn process_instruction(
         .ok_or(ProgramError::InvalidInstructionData)?;
 
     match ProgramInstruction::try_from(ix_disc)? {
+        ProgramInstruction::Initialize => {
+            log!("Initialize instruction");
+            instruction::initialize::process_initialize(accounts, instruction_data)
+        }
+        ProgramInstruction::Contribute => {
+            log!("Contribute instruction");
+            instruction::contribute::process_contribute(accounts, instruction_data)
+        }
+        ProgramInstruction::CheckContribution => {
+            log!("CheckContribution instruction");
+            todo!()
+            // instruction::contribute::process_check_contribution(accounts, instruction_data)
+        }
+        ProgramInstruction::Refund => {
+            log!("Refund instruction");
+            todo!()
+            // instruction::contribute::process_refund(accounts, instruction_data)
+        }
         _ => {
             log!("Invalid instruction");
             return Err(ProgramError::InvalidInstructionData);

@@ -1,7 +1,9 @@
 use pinocchio::program_error::ProgramError;
 
 pub mod initialize;
+pub mod contribute;
 pub use initialize::*;
+pub use contribute::*;
 
 #[repr(u8)]
 pub enum ProgramInstruction {

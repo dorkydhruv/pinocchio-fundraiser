@@ -6,7 +6,7 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
-
+use pinocchio_token::state::TokenAccount;
 use crate::{ state::Fundraiser, utils::{ load_acc_mut_unchecked, load_ix_data, DataLen } };
 
 #[repr(C)]
@@ -43,8 +43,9 @@ pub fn process_initialize(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
 
     // Some more checks
     unsafe {
+        let vault_acc = TokenAccount::from_account_info(vault)?;
         // The vault should be intialised on client side to save CUs
-        assert_eq!(vault.owner(), fundraiser.key());
+        assert_eq!(vault_acc.owner(), fundraiser.key());
     }
 
     let rent = Rent::from_account_info(sysvar_rent_acc)?;

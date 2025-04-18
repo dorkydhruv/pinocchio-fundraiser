@@ -6,13 +6,13 @@ use pinocchio::{
     ProgramResult,
 };
 use pinocchio_system::instructions::CreateAccount;
-use pinocchio_token::{ state::Mint, instructions::TransferChecked };
+use pinocchio_token::{ instructions::TransferChecked, state::{ Mint, TokenAccount } };
 
 use crate::{
     constants::{ MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO_DAYS },
     error::FundraiserError,
     state::{ Contributor, Fundraiser },
-    utils::{ load_acc_mut_unchecked, load_acc_unchecked, load_ix_data, DataLen },
+    utils::{ load_acc_mut, load_acc_mut_unchecked, load_acc_unchecked, load_ix_data, DataLen },
 };
 
 #[repr(C)]
@@ -47,17 +47,17 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     }
 
     // Some checks for authorities
-    unsafe {
-        // The vault should be intialised on client side to save CUs
-        assert_eq!(vault.owner(), fundraiser.key());
-        assert_eq!(contributor_ata.owner(), contributor.key());
-        assert_eq!(fundraiser.owner(), &crate::ID);
-    }
+    let vault_acc = TokenAccount::from_account_info(vault)?;
+    // The vault should be intialised on client side to save CUs
+    assert_eq!(vault_acc.owner(), fundraiser.key());
+    let contributor_ata_acc = TokenAccount::from_account_info(contributor_ata)?;
+    assert_eq!(contributor_ata_acc.owner(), contributor.key());
 
     let ix_data = unsafe { load_ix_data::<ContributeIxData>(data)? };
 
     // Create contributor account if it doesn't exist
-    if contributor_acc.data_is_empty() {
+
+    if contributor_acc.data_is_empty() || (unsafe { contributor_acc.owner() != &crate::ID }) {
         let rent = Rent::from_account_info(sysvar_rent_acc)?;
         let pda_bump_bytes = [ix_data.contributor_bump];
         let signer_seeds = [
@@ -81,14 +81,14 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     }
 
     let fundraiser_state = unsafe {
-        load_acc_mut_unchecked::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
+        load_acc_mut::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
     };
-    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise.borrow_data_unchecked())? };
-    let contributor_state = (unsafe {
-        load_acc_mut_unchecked::<Contributor>(contributor_acc.borrow_mut_data_unchecked())
-    })?;
+    let mint_state = Mint::from_account_info(mint_to_raise)?;
+    let contributor_state = unsafe {
+        load_acc_mut::<Contributor>(contributor_acc.borrow_mut_data_unchecked())?
+    };
     // Check if the amount to contribute meets the minimum amount required
-    if ix_data.amount < ((1_u8).pow(mint_state.decimals() as u32) as u64) {
+    if ix_data.amount < ((10_u32).pow(mint_state.decimals() as u32) as u64) {
         return Err(FundraiserError::ContributionTooSmall.into());
     }
 
@@ -119,14 +119,6 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         return Err(FundraiserError::MaximumContributionsReached.into());
     }
 
-    let pda_bump_bytes = [ix_data.contributor_bump];
-    let signer_seeds = [
-        Seed::from(Contributor::SEED.as_bytes()),
-        Seed::from(fundraiser.key().as_ref()),
-        Seed::from(contributor.key().as_ref()),
-        Seed::from(&pda_bump_bytes[..]),
-    ];
-    let contributor_signer = Signer::from(&signer_seeds[..]);
     (TransferChecked {
         from: contributor_ata,
         to: vault,
@@ -134,7 +126,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         mint: mint_to_raise,
         amount: ix_data.amount,
         decimals: mint_state.decimals(),
-    }).invoke_signed(&[contributor_signer])?;
+    }).invoke()?;
 
     // Update the states
     contributor_state.amount += ix_data.amount;

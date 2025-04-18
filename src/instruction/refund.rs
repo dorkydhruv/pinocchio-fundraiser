@@ -11,7 +11,7 @@ use crate::{
     constants::SECONDS_TO_DAYS,
     error::FundraiserError,
     state::{ Contributor, Fundraiser },
-    utils::{ load_acc_mut_unchecked, Initialized },
+    utils::load_acc_mut,
 };
 
 pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
@@ -34,28 +34,21 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
         return Err(ProgramError::MissingRequiredSignature);
     }
 
+    // / Some checks for authorities
+    let vault_acc = TokenAccount::from_account_info(vault)?;
+    // The vault should be intialised on client side to save CUs
+    assert_eq!(vault_acc.owner(), fundraiser.key());
+    let contributor_ata_acc = TokenAccount::from_account_info(contributor_ata)?;
+    // assert_eq!(contributor_ata_acc.owner(), contributor.key());
     // Some checks for authorities
-    unsafe {
-        // The vault should be intialised on client side to save CUs
-        assert_eq!(vault.owner(), fundraiser.key());
-        assert_eq!(contributor_ata.owner(), contributer.key());
-        assert_eq!(fundraiser.owner(), &crate::ID);
-    }
-
     // Check if the fundraiser is initialized
     let fundraiser_state = unsafe {
-        load_acc_mut_unchecked::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
+        load_acc_mut::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
     };
-    if !fundraiser_state.is_initialized() {
-        return Err(ProgramError::UninitializedAccount);
-    }
 
     let contributor_state = unsafe {
-        load_acc_mut_unchecked::<Contributor>(contributor_acc.borrow_mut_data_unchecked())?
+        load_acc_mut::<Contributor>(contributor_acc.borrow_mut_data_unchecked())?
     };
-    if !contributor_state.is_initialized() {
-        return Err(ProgramError::UninitializedAccount);
-    }
 
     // Check if the fundraising duration has been reached
     let current_time = Clock::get()?.unix_timestamp;
@@ -67,19 +60,14 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     }
 
     // Check if the target amount has been met
-    let vault_state = unsafe {
-        load_acc_mut_unchecked::<TokenAccount>(vault.borrow_mut_data_unchecked())?
-    };
+    let vault_state = TokenAccount::from_account_info(vault)?;
 
     if vault_state.amount() >= fundraiser_state.amount_to_raise {
         return Err(FundraiserError::TargetMet.into());
     }
 
     // Transfer the funds to the contributor
-    let mint_state = unsafe {
-        load_acc_mut_unchecked::<Mint>(mint_to_raise.borrow_mut_data_unchecked())?
-    };
-
+    let mint_state = Mint::from_account_info(mint_to_raise)?;
     let bump_seed = [fundraiser_state.bump];
     let fundraiser_seeds = [
         Seed::from(Fundraiser::SEED.as_bytes()),
@@ -101,6 +89,7 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     unsafe {
         *contributer.borrow_mut_lamports_unchecked() +=
             *contributor_acc.borrow_mut_lamports_unchecked();
+        *contributor_acc.borrow_mut_lamports_unchecked() = 0;
         contributor_acc.close()?;
     }
     Ok(())

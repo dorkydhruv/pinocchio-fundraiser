@@ -12,7 +12,7 @@ use pinocchio_token::{
 use crate::{
     error::FundraiserError,
     state::Fundraiser,
-    utils::{ load_acc_unchecked, DataLen, Initialized },
+    utils::{ load_acc, DataLen },
 };
 
 impl DataLen for Mint {
@@ -24,8 +24,16 @@ impl DataLen for TokenAccount {
 }
 
 pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
-    let [maker, mint_to_raise, fundraiser, vault, maker_ata, _token_program, _system_program] =
-        accounts else {
+    let [
+        maker,
+        mint_to_raise,
+        fundraiser,
+        vault,
+        maker_ata,
+        _token_program,
+        _system_program,
+        _rest @ ..,
+    ] = accounts else {
         return Err(ProgramError::InvalidAccountData);
     };
 
@@ -34,22 +42,17 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
     }
 
     let fundraiser_state = unsafe {
-        load_acc_unchecked::<Fundraiser>(fundraiser.borrow_data_unchecked())?
+        load_acc::<Fundraiser>(fundraiser.borrow_data_unchecked())?
     };
 
-    if !fundraiser_state.is_initialized() {
-        return Err(ProgramError::UninitializedAccount);
-    }
 
     if fundraiser_state.current_amount <= fundraiser_state.amount_to_raise {
         return Err(FundraiserError::TargetNotMet.into());
     }
 
     // Transfer the funds to the maker
-    let _maker_ata_state = unsafe {
-        load_acc_unchecked::<TokenAccount>(maker_ata.borrow_data_unchecked())?
-    };
-    let mint_state = unsafe { load_acc_unchecked::<Mint>(mint_to_raise.borrow_data_unchecked())? };
+    let _maker_ata_state = TokenAccount::from_account_info(maker_ata)?;
+    let mint_state = Mint::from_account_info(mint_to_raise)?;
 
     let bump_seed = [fundraiser_state.bump];
     let fundraiser_seeds = [
@@ -78,6 +81,7 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
     // Close the fundraiser account
     unsafe {
         *maker.borrow_mut_lamports_unchecked() += *fundraiser.borrow_lamports_unchecked();
+        *fundraiser.borrow_mut_lamports_unchecked() = 0;
         fundraiser.close()?;
     }
 

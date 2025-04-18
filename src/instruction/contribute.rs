@@ -12,7 +12,7 @@ use crate::{
     constants::{ MAX_CONTRIBUTION_PERCENTAGE, PERCENTAGE_SCALER, SECONDS_TO_DAYS },
     error::FundraiserError,
     state::{ Contributor, Fundraiser },
-    utils::{ load_acc_mut, load_acc_mut_unchecked, load_acc_unchecked, load_ix_data, DataLen },
+    utils::{ load_acc_mut, load_acc_mut_unchecked, load_ix_data, DataLen },
 };
 
 #[repr(C)]
@@ -35,7 +35,6 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         contributor_acc,
         contributor_ata,
         vault,
-        sysvar_rent_acc,
         _token_program,
         _system_program,
     ] = accounts else {
@@ -57,8 +56,8 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
 
     // Create contributor account if it doesn't exist
 
-    if contributor_acc.data_is_empty() || (unsafe { contributor_acc.owner() != &crate::ID }) {
-        let rent = Rent::from_account_info(sysvar_rent_acc)?;
+    if contributor_acc.data_is_empty() || !contributor_acc.is_owned_by(&crate::ID) {
+        let rent = Rent::get()?;
         let pda_bump_bytes = [ix_data.contributor_bump];
         let signer_seeds = [
             Seed::from(Contributor::SEED.as_bytes()),
@@ -88,6 +87,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         load_acc_mut::<Contributor>(contributor_acc.borrow_mut_data_unchecked())?
     };
     // Check if the amount to contribute meets the minimum amount required
+    // 10**9
     if ix_data.amount < ((10_u32).pow(mint_state.decimals() as u32) as u64) {
         return Err(FundraiserError::ContributionTooSmall.into());
     }
@@ -103,7 +103,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     // Check if the fundraising duration has been reached
     let current_time = Clock::get()?.unix_timestamp;
     if
-        fundraiser_state.duration >
+        fundraiser_state.duration <
         (((current_time - fundraiser_state.time_started) / SECONDS_TO_DAYS) as u8)
     {
         return Err(FundraiserError::FundraiserEnded.into());

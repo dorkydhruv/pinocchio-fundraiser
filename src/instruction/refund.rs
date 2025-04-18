@@ -38,7 +38,6 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     let vault_acc = TokenAccount::from_account_info(vault)?;
     // The vault should be intialised on client side to save CUs
     assert_eq!(vault_acc.owner(), fundraiser.key());
-    let contributor_ata_acc = TokenAccount::from_account_info(contributor_ata)?;
     // assert_eq!(contributor_ata_acc.owner(), contributor.key());
     // Some checks for authorities
     // Check if the fundraiser is initialized
@@ -53,16 +52,12 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     // Check if the fundraising duration has been reached
     let current_time = Clock::get()?.unix_timestamp;
     if
-        fundraiser_state.duration <
+        fundraiser_state.duration >
         (((current_time - fundraiser_state.time_started) / SECONDS_TO_DAYS) as u8)
     {
         return Err(FundraiserError::FundraiserNotEnded.into());
     }
-
-    // Check if the target amount has been met
-    let vault_state = TokenAccount::from_account_info(vault)?;
-
-    if vault_state.amount() >= fundraiser_state.amount_to_raise {
+    if vault_acc.amount() >= fundraiser_state.amount_to_raise {
         return Err(FundraiserError::TargetMet.into());
     }
 
@@ -89,8 +84,7 @@ pub fn process_refund(accounts: &[AccountInfo], _data: &[u8]) -> ProgramResult {
     unsafe {
         *contributer.borrow_mut_lamports_unchecked() +=
             *contributor_acc.borrow_mut_lamports_unchecked();
-        *contributor_acc.borrow_mut_lamports_unchecked() = 0;
-        contributor_acc.close()?;
     }
+    contributor_acc.close()?;
     Ok(())
 }

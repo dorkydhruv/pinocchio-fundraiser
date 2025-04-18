@@ -12,9 +12,9 @@ use crate::{ state::Fundraiser, utils::{ load_acc_mut_unchecked, load_ix_data, D
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InitializeIxData {
-    amount: u64,
-    duration: u8,
-    bump: u8,
+    amount: u64,//8 bytes
+    duration: u8,//4 bytes
+    bump: u8,//4 bytes
 }
 
 impl DataLen for InitializeIxData {
@@ -27,9 +27,9 @@ pub fn process_initialize(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         mint_to_raise,
         fundraiser,
         vault,
-        sysvar_rent_acc,
         _system_program,
         _token_program,
+        _rest @..
     ] = accounts else {
         return Err(ProgramError::InvalidAccountData);
     };
@@ -40,15 +40,13 @@ pub fn process_initialize(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     if !fundraiser.data_is_empty() {
         return Err(ProgramError::AccountAlreadyInitialized);
     }
+    let vault_acc = TokenAccount::from_account_info(vault)?;
+    // The vault should be intialised on client side to save CUs
+    assert_eq!(vault_acc.owner(), fundraiser.key());
+    
 
-    // Some more checks
-    unsafe {
-        let vault_acc = TokenAccount::from_account_info(vault)?;
-        // The vault should be intialised on client side to save CUs
-        assert_eq!(vault_acc.owner(), fundraiser.key());
-    }
-
-    let rent = Rent::from_account_info(sysvar_rent_acc)?;
+    // Rent can be here too, I guess if it saves CU
+    let rent = Rent::get()?;
     let ix_data = unsafe { load_ix_data::<InitializeIxData>(data)? };
 
     let bump_seed = [ix_data.bump];

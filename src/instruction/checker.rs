@@ -81,9 +81,7 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
     // Close the fundraiser account
     unsafe {
         *maker.borrow_mut_lamports_unchecked() += *fundraiser.borrow_lamports_unchecked();
-        *fundraiser.borrow_mut_lamports_unchecked() = 0;
-        fundraiser.close()?;
     }
-
+    fundraiser.close()?;
     Ok(())
 }

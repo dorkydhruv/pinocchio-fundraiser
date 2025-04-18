@@ -1,15 +1,15 @@
-use mollusk_svm::result::{Check, ProgramResult};
-use mollusk_svm::{program, Mollusk};
+use mollusk_svm::result::{ Check, ProgramResult };
+use mollusk_svm::{ program, Mollusk };
 use solana_sdk::account::Account;
-use solana_sdk::instruction::{AccountMeta, Instruction};
+use solana_sdk::instruction::{ AccountMeta, Instruction };
 use solana_sdk::native_token::LAMPORTS_PER_SOL;
 use solana_sdk::pubkey;
 use solana_sdk::pubkey::Pubkey;
 extern crate alloc;
 use alloc::vec;
 
-use solana_pinocchio_starter::instruction::{InitializeMyStateIxData, UpdateMyStateIxData};
-use solana_pinocchio_starter::state::{to_bytes, DataLen, MyState, State};
+use solana_pinocchio_starter::instruction::{ InitializeMyStateIxData, UpdateMyStateIxData };
+use solana_pinocchio_starter::state::{ to_bytes, DataLen, MyState, State };
 use solana_pinocchio_starter::ID;
 use solana_sdk::rent::Rent;
 use solana_sdk::sysvar::Sysvar;
@@ -35,13 +35,19 @@ pub fn get_rent_data() -> Vec<u8> {
 #[test]
 fn test_initialize_mystate() {
     let mollusk = mollusk();
-
+    mollusk.add_program(
+        &spl_token::ID,
+        "src/tests/elfs/spl_token.so",
+        &mollusk_svm::program::loader_keys::LOADER_V3
+    );
     //system program and system account
     let (system_program, system_account) = program::keyed_account_for_system_program();
-
+    
     // Create the PDA
-    let (mystate_pda, bump) =
-        Pubkey::find_program_address(&[MyState::SEED.as_bytes(), &PAYER.to_bytes()], &PROGRAM);
+    let (mystate_pda, bump) = Pubkey::find_program_address(
+        &[MyState::SEED.as_bytes(), &PAYER.to_bytes()],
+        &PROGRAM
+    );
 
     //Initialize the accounts
     let payer_account = Account::new(1 * LAMPORTS_PER_SOL, 0, &system_program);
@@ -55,7 +61,7 @@ fn test_initialize_mystate() {
         AccountMeta::new(PAYER, true),
         AccountMeta::new(mystate_pda, false),
         AccountMeta::new_readonly(RENT, false),
-        AccountMeta::new_readonly(system_program, false),
+        AccountMeta::new_readonly(system_program, false)
     ];
 
     // Create the instruction data
@@ -79,11 +85,14 @@ fn test_initialize_mystate() {
         (PAYER, payer_account.clone()),
         (mystate_pda, mystate_account.clone()),
         (RENT, rent_account.clone()),
-        (system_program, system_account.clone()),
+        (system_program, system_account.clone())
     ];
 
-    let init_res =
-        mollusk.process_and_validate_instruction(&instruction, tx_accounts, &[Check::success()]);
+    let init_res = mollusk.process_and_validate_instruction(
+        &instruction,
+        tx_accounts,
+        &[Check::success()]
+    );
 
     assert!(init_res.program_result == ProgramResult::Success);
 }
@@ -96,8 +105,10 @@ fn test_update_mystate() {
     let (system_program, _system_account) = program::keyed_account_for_system_program();
 
     // Create the PDA
-    let (mystate_pda, _bump) =
-        Pubkey::find_program_address(&[MyState::SEED.as_bytes(), &PAYER.to_bytes()], &PROGRAM);
+    let (mystate_pda, _bump) = Pubkey::find_program_address(
+        &[MyState::SEED.as_bytes(), &PAYER.to_bytes()],
+        &PROGRAM
+    );
 
     //Initialize the accounts
     let payer_account = Account::new(1 * LAMPORTS_PER_SOL, 0, &system_program);
@@ -117,10 +128,7 @@ fn test_update_mystate() {
     mystate_account.data = unsafe { to_bytes(&my_state).to_vec() };
 
     //Push the accounts in to the instruction_accounts vec!
-    let ix_accounts = vec![
-        AccountMeta::new(PAYER, true),
-        AccountMeta::new(mystate_pda, false),
-    ];
+    let ix_accounts = vec![AccountMeta::new(PAYER, true), AccountMeta::new(mystate_pda, false)];
 
     // Create the instruction data
     let ix_data = UpdateMyStateIxData { data: [1; 32] };
@@ -134,13 +142,13 @@ fn test_update_mystate() {
     // Create instruction
     let instruction = Instruction::new_with_bytes(PROGRAM, &ser_ix_data, ix_accounts);
     // Create tx_accounts vec
-    let tx_accounts = &vec![
-        (PAYER, payer_account.clone()),
-        (mystate_pda, mystate_account.clone()),
-    ];
+    let tx_accounts = &vec![(PAYER, payer_account.clone()), (mystate_pda, mystate_account.clone())];
 
-    let update_res =
-        mollusk.process_and_validate_instruction(&instruction, tx_accounts, &[Check::success()]);
+    let update_res = mollusk.process_and_validate_instruction(
+        &instruction,
+        tx_accounts,
+        &[Check::success()]
+    );
 
     assert!(update_res.program_result == ProgramResult::Success);
 }

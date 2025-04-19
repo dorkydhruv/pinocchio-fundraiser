@@ -1,11 +1,19 @@
-# Solana Pinocchio Starter
+# Pinocchio Fundraiser (WIP)
 
-## Steps to start (Please use wsl or linux for smooth devex)
+## Instructions tested..
+
+Note: All ATAs are initialized on client/test
+
+- Initialize - init fundraiser pda (2178 CUs) [Uses CreateAccount CPI]
+- Contribute - contribute mint amount for fundraising campaign (6457 CUs) [Uses CreateAccount and TransferChecked CPIs]
+- Checker - completes the fundraising campaign (7247 CUs) [Uses TransferChecked and CloseAccount CPIs]
+
+## Get Started!
 
 ### 1. clone the repo
 
 ```bash
-git clone git@github.com:Nagaprasadvr/solana-pinocchio-starter.git
+git clone https://github.com/dorkydhruv/pinocchio-fundraiser.git
 ```
 
 ### 2. Directory structure
@@ -25,7 +33,7 @@ git clone git@github.com:Nagaprasadvr/solana-pinocchio-starter.git
 
   - [state](src/state/) - all account states are defined here
 
-    - [utils.rs](src/state/utils.rs) - utils for state which provide serialization and deserialization helper fns( load_acc , load_mut_acc, etc)
+  - [utils.rs](src/utils.rs) - utils for state which provide serialization and deserialization helper fns( load_acc , load_mut_acc, etc)
 
   - [error.rs](program/src/error.rs) - program errors are listed here
 
@@ -47,7 +55,7 @@ cargo build-sbf
 - After build is successful get the program pubkey and replace with the pinocchio_pubkey::declare_id!(...)
 
 ```bash
-solana address -k target/deploy/solana_pinocchio_starter-keypair.json
+solana address -k target/deploy/pinocchio-fundraiser-keypair.json
 ```
 
 ### 4. Running Tests
@@ -64,15 +72,12 @@ cargo bench --features bench-default
 
 #### Compute Unit Benchmarks
 
-#### 2025-04-07 06:27:51.301668567 UTC
+#### 2025-04-19 23:24:51.634550527 UTC
 
-Solana CLI Version: solana-cli 2.1.18 (src:f91c2fca; feat:3271415109, client:Agave)
+Solana CLI Version: solana-cli 2.1.17 (src:4adcd0f2; feat:3271415109, client:Agave)
 
-| Name              | CUs  | Delta   |
-| ----------------- | ---- | ------- |
-| InitializeMyState | 3375 | - new - |
-| UpdateMyState     | 215  | - new - |
-
-### 5. Client Generation
-
-WIP...
+| Name                             | CUs  | Delta   |
+| -------------------------------- | ---- | ------- |
+| Initialize                       | 2178 | --      |
+| Contribute                       | 6457 | --      |
+| Checker (after 10 contributions) | 7247 | - new - |

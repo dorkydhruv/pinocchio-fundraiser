@@ -1,14 +1,14 @@
 #![no_std]
-
-#[cfg(not(feature = "no-entrypoint"))]
-mod entrypoint;
+#![allow(unexpected_cfgs)]
 
 #[cfg(feature = "std")]
 extern crate std;
+#[cfg(not(feature = "no-entrypoint"))]
 
+mod entrypoint;
 pub mod error;
 pub mod instruction;
 pub mod state;
 pub mod utils;
 pub mod constants;
-pinocchio_pubkey::declare_id!("4ibrEMW5F6hKnkW4jVedswYv6H6VtwPN6ar6dvXDN1nT");
+pinocchio_pubkey::declare_id!("AvvaLMBjGBWNamh1qV72gzG412kiZWVFHu2PMi36Bg3G");

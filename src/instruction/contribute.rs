@@ -18,9 +18,9 @@ use crate::{
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ContributeIxData {
-    amount: u64,
-    fundraiser_bump: u8,
-    contributor_bump: u8,
+    pub amount: u64,
+    pub fundraiser_bump: u8,
+    pub contributor_bump: u8,
 }
 
 impl DataLen for ContributeIxData {
@@ -45,17 +45,21 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    // Some checks for authorities
-    let vault_acc = TokenAccount::from_account_info(vault)?;
-    // The vault should be intialised on client side to save CUs
-    assert_eq!(vault_acc.owner(), fundraiser.key());
-    let contributor_ata_acc = TokenAccount::from_account_info(contributor_ata)?;
-    assert_eq!(contributor_ata_acc.owner(), contributor.key());
+    // Should be done inside a seperate block as this is a mutable borrow
+    // consumed 6457 of 1400000 compute units (when using the checks)
+    // consumed 6338 of 1400000 compute units (without the checks)
+    {
+        // Some checks for authorities
+        let vault_acc = TokenAccount::from_account_info(vault)?;
+        // The vault should be intialised on client side to save CUs
+        assert_eq!(vault_acc.owner(), fundraiser.key());
+        let contributor_ata_acc = TokenAccount::from_account_info(contributor_ata)?;
+        assert_eq!(contributor_ata_acc.owner(), contributor.key());
+    }
 
     let ix_data = unsafe { load_ix_data::<ContributeIxData>(data)? };
 
     // Create contributor account if it doesn't exist
-
     if contributor_acc.data_is_empty() || !contributor_acc.is_owned_by(&crate::ID) {
         let rent = Rent::get()?;
         let pda_bump_bytes = [ix_data.contributor_bump];
@@ -67,7 +71,7 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         ];
         let contributor_signer = Signer::from(&signer_seeds[..]);
         (CreateAccount {
-            from: contributor,
+            from: &contributor.clone(),
             to: contributor_acc,
             lamports: rent.minimum_balance(Contributor::LEN),
             space: Contributor::LEN as u64,
@@ -78,17 +82,17 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         })?;
         contributor_state.initialize(ix_data.amount);
     }
+    let mint_state = Mint::from_account_info(mint_to_raise)?;
+    let decimals = mint_state.decimals();
 
     let fundraiser_state = unsafe {
         load_acc_mut::<Fundraiser>(fundraiser.borrow_mut_data_unchecked())?
     };
-    let mint_state = Mint::from_account_info(mint_to_raise)?;
     let contributor_state = unsafe {
         load_acc_mut::<Contributor>(contributor_acc.borrow_mut_data_unchecked())?
     };
     // Check if the amount to contribute meets the minimum amount required
-    // 10**9
-    if ix_data.amount < ((10_u32).pow(mint_state.decimals() as u32) as u64) {
+    if ix_data.amount < ((10_u32).pow(decimals as u32) as u64) {
         return Err(FundraiserError::ContributionTooSmall.into());
     }
 
@@ -108,12 +112,11 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
     {
         return Err(FundraiserError::FundraiserEnded.into());
     }
-
     // Check if the maximum contributions per contributor have been reached
     if
-        contributor_state.amount >=
+        contributor_state.amount >
             (fundraiser_state.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER &&
-        contributor_state.amount + ix_data.amount >=
+        contributor_state.amount + ix_data.amount >
             (fundraiser_state.amount_to_raise * MAX_CONTRIBUTION_PERCENTAGE) / PERCENTAGE_SCALER
     {
         return Err(FundraiserError::MaximumContributionsReached.into());
@@ -125,8 +128,8 @@ pub fn process_contribute(accounts: &[AccountInfo], data: &[u8]) -> ProgramResul
         authority: contributor,
         mint: mint_to_raise,
         amount: ix_data.amount,
-        decimals: mint_state.decimals(),
-    }).invoke()?;
+        decimals,
+    }).invoke()?; // No invoke_signed here, as the signer is the contributor
 
     // Update the states
     contributor_state.amount += ix_data.amount;

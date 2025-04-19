@@ -9,11 +9,7 @@ use pinocchio_token::{
     state::Mint,
     state::TokenAccount,
 };
-use crate::{
-    error::FundraiserError,
-    state::Fundraiser,
-    utils::{ load_acc, DataLen },
-};
+use crate::{ error::FundraiserError, state::Fundraiser, utils::{ load_acc, DataLen } };
 
 impl DataLen for Mint {
     const LEN: usize = core::mem::size_of::<Mint>();
@@ -41,17 +37,12 @@ pub fn process_check_contribution(accounts: &[AccountInfo], _data: &[u8]) -> Pro
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let fundraiser_state = unsafe {
-        load_acc::<Fundraiser>(fundraiser.borrow_data_unchecked())?
-    };
-
-
-    if fundraiser_state.current_amount <= fundraiser_state.amount_to_raise {
+    let fundraiser_state = unsafe { load_acc::<Fundraiser>(fundraiser.borrow_data_unchecked())? };
+    if fundraiser_state.current_amount < fundraiser_state.amount_to_raise {
         return Err(FundraiserError::TargetNotMet.into());
     }
 
     // Transfer the funds to the maker
-    let _maker_ata_state = TokenAccount::from_account_info(maker_ata)?;
     let mint_state = Mint::from_account_info(mint_to_raise)?;
 
     let bump_seed = [fundraiser_state.bump];
